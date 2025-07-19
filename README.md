@@ -26,6 +26,13 @@ This function analyzes the vocal delivery of a speech from an audio file and ret
 - **Pitch Variance**: A score indicating how monotone the speech is.
 - **Long Pauses**: The number of pauses longer than 1.5 seconds.
 
+### `analyze_content(transcript)`
+
+This function uses a Large Language Model (Google's Gemini) to analyze the content of the speech. It returns a dictionary with:
+- **Filler Word Counts**: A count of common filler words.
+- **Clarity Score**: A score from 1 to 10 on the clarity of the speech.
+- **Suggestions**: Actionable suggestions for improvement.
+
 ## Getting Started
 
 ### System-Level Dependencies
@@ -47,6 +54,14 @@ This project requires **FFmpeg** for audio processing on the backend. Please ins
 
 - Node.js and npm
 - Python 3.7+ and pip
+
+### API Key Setup
+
+The content analysis feature uses the Google Gemini API. To use it, you need to get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey) and set it as an environment variable.
+
+```bash
+export GEMINI_API_KEY="YOUR_API_KEY"
+```
 
 ### Installation and Running
 
