@@ -9,6 +9,15 @@ This project is a web application designed to help users improve their public sp
 - **Real-time Audio Streaming**: Captures audio from the user's microphone and streams it to the server via WebSockets.
 - **Audio Processing & Storage**: The backend processes the incoming audio stream and saves it as a `.wav` file upon session completion.
 - **Connection Logging**: The backend logs client connections, disconnections, and audio processing status.
+- **Audio Transcription**: Transcribes the user's speech to text using OpenAI's Whisper model.
+
+## Audio Analysis
+
+The `backend/analysis.py` module provides functions for analyzing the user's speech.
+
+### `transcribe_audio(file_path)`
+
+This function takes the path to an audio file as input and returns the transcription of the audio. It uses the `base` model of OpenAI's Whisper for efficiency.
 
 ## Getting Started
 

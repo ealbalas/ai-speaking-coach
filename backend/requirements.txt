@@ -1,4 +1,3 @@
-fastapi
-uvicorn
-websockets
-pydub
+openai-whisper
+pytest
+pytest-mock
