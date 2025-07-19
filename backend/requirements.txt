@@ -4,3 +4,4 @@ pytest-mock
 librosa
 pyin
 google-generativeai
+python-dotenv

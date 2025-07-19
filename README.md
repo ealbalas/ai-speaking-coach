@@ -9,7 +9,7 @@ This project is a web application designed to help users improve their public sp
 - **Real-time Audio Streaming**: Captures audio from the user's microphone and streams it to the server via WebSockets.
 - **Audio Processing & Storage**: The backend processes the incoming audio stream and saves it as a `.wav` file upon session completion.
 - **Connection Logging**: The backend logs client connections, disconnections, and audio processing status.
-- **Audio Transcription**: Transcribes the user's speech to text using OpenAI's Whisper model.
+- **Full-Stack Analysis**: When a recording is stopped, the frontend receives a session ID, requests a full analysis from a dedicated backend endpoint, and displays a comprehensive report covering transcription, vocal delivery, and content analysis.
 
 ## Audio Analysis
 

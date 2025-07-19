@@ -1,10 +1,11 @@
-import whisper
+import json
+import os
+
+import google.generativeai as genai
 import librosa
 import numpy as np
-from pyin import pyin
-import google.generativeai as genai
-import os
-import json
+import whisper
+
 
 def transcribe_audio(file_path: str) -> str:
     """
@@ -19,6 +20,7 @@ def transcribe_audio(file_path: str) -> str:
     model = whisper.load_model("base")
     result = model.transcribe(file_path)
     return result["text"]
+
 
 def analyze_vocal_delivery(file_path: str) -> dict:
     """
@@ -43,7 +45,9 @@ def analyze_vocal_delivery(file_path: str) -> dict:
     speaking_rate = (word_count / duration) * 60 if duration > 0 else 0
 
     # 2. Calculate Pitch Variance (Monotone Score)
-    f0, _, _ = pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'), sr=sr)
+    f0, _, _ = librosa.pyin(
+        y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr
+    )
     # Filter out unvoiced frames (NaNs) before calculating variance
     voiced_f0 = f0[~np.isnan(f0)]
     pitch_variance = np.std(voiced_f0) if voiced_f0.size > 0 else 0
@@ -55,7 +59,7 @@ def analyze_vocal_delivery(file_path: str) -> dict:
     if len(non_silent_intervals) > 1:
         for i in range(len(non_silent_intervals) - 1):
             pause_start = non_silent_intervals[i][1]
-            pause_end = non_silent_intervals[i+1][0]
+            pause_end = non_silent_intervals[i + 1][0]
             pause_duration = (pause_end - pause_start) / sr
             if pause_duration > 1.5:
                 long_pauses_count += 1
@@ -65,6 +69,7 @@ def analyze_vocal_delivery(file_path: str) -> dict:
         "pitch_variance": pitch_variance,
         "long_pauses_count": long_pauses_count,
     }
+
 
 def analyze_content(transcript: str) -> dict:
     """
@@ -83,9 +88,9 @@ def analyze_content(transcript: str) -> dict:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable not set.")
-        
+
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
     prompt = f"""
     Analyze the following speech transcript and provide the following metrics in a JSON format:
@@ -102,12 +107,14 @@ def analyze_content(transcript: str) -> dict:
     try:
         response = model.generate_content(prompt)
         # The response text might be enclosed in ```json ... ```, so we need to extract it.
-        json_string = response.text.strip().replace("```json", "").replace("```", "").strip()
+        json_string = (
+            response.text.strip().replace("```json", "").replace("```", "").strip()
+        )
         return json.loads(json_string)
     except Exception as e:
         print(f"An error occurred during API call: {e}")
         return {
             "filler_word_counts": {},
             "clarity_score": 0,
-            "suggestions": ["Failed to analyze content due to an API error."]
+            "suggestions": ["Failed to analyze content due to an API error."],
         }

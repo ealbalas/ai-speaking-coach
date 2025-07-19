@@ -1,21 +1,47 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import AnalysisReport from './AnalysisReport';
 
 enum RecordingState {
   Idle,
   Recording,
   Stopped,
+  Analyzing,
+  Complete,
 }
 
 export default function Home() {
   const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.Idle);
   const [statusMessage, setStatusMessage] = useState('Click "Start Recording" to begin.');
+  const [analysisReport, setAnalysisReport] = useState<any>(null);
   
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const sessionIdRef = useRef<string | null>(null); // Use a ref for the session ID
+
+  const fetchAnalysis = async (id: string) => {
+    setRecordingState(RecordingState.Analyzing);
+    setStatusMessage('Analyzing your speech...');
+    try {
+      const response = await fetch(`http://localhost:8000/analysis/${id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch analysis.');
+      }
+      const report = await response.json();
+      setAnalysisReport(report);
+      setRecordingState(RecordingState.Complete);
+      setStatusMessage('Analysis complete!');
+    } catch (error) {
+      console.error('Error fetching analysis:', error);
+      setStatusMessage('Failed to get analysis. Please try again.');
+      setRecordingState(RecordingState.Idle);
+    }
+  };
 
   const startRecording = async () => {
+    setAnalysisReport(null);
+    sessionIdRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setStatusMessage('Microphone access granted. Connecting to server...');
@@ -24,36 +50,46 @@ export default function Home() {
       socketRef.current = socket;
 
       socket.onopen = () => {
-        setStatusMessage('Connected. Starting recording...');
-        setRecordingState(RecordingState.Recording);
+        setStatusMessage('Connected. Waiting for session ID...');
+      };
 
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-        mediaRecorderRef.current = mediaRecorder;
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.session_id) {
+          sessionIdRef.current = data.session_id; // Store session ID in the ref
+          setStatusMessage('Session started. Recording...');
+          setRecordingState(RecordingState.Recording);
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-            socket.send(event.data);
-          }
-        };
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+          mediaRecorderRef.current = mediaRecorder;
 
-        mediaRecorder.onstop = () => {
-          // When recording stops, close the WebSocket connection from the client side.
-          // This will trigger the backend to save the file.
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.close();
-          }
-          stream.getTracks().forEach(track => track.stop()); // Stop microphone access
-          setStatusMessage('Recording stopped. Audio sent to server for processing.');
-          setRecordingState(RecordingState.Stopped);
-        };
-        
-        // Send audio in chunks every second
-        mediaRecorder.start(1000); 
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+              socket.send(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = () => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.close();
+            }
+            stream.getTracks().forEach(track => track.stop());
+            setStatusMessage('Recording stopped. Uploading audio...');
+            setRecordingState(RecordingState.Stopped);
+          };
+          
+          mediaRecorder.start(1000);
+        }
       };
 
       socket.onclose = () => {
-        setStatusMessage('Connection closed. Ready to start a new session.');
-        setRecordingState(RecordingState.Idle);
+        setStatusMessage('Upload complete. Preparing analysis...');
+        if (sessionIdRef.current) { // Read session ID from the ref
+          fetchAnalysis(sessionIdRef.current);
+        } else {
+            setStatusMessage('Could not get session ID. Please try again.');
+            setRecordingState(RecordingState.Idle);
+        }
       };
 
       socket.onerror = (error) => {
@@ -72,6 +108,13 @@ export default function Home() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
+  };
+
+  const resetSession = () => {
+    setRecordingState(RecordingState.Idle);
+    setStatusMessage('Click "Start Recording" to begin.');
+    setAnalysisReport(null);
+    sessionIdRef.current = null;
   };
 
   return (
@@ -96,10 +139,20 @@ export default function Home() {
               Stop Recording
             </button>
           )}
-            {recordingState === RecordingState.Stopped && (
-              <p className="text-green-400">Session complete!</p>
-            )}
+          {(recordingState === RecordingState.Stopped || recordingState === RecordingState.Analyzing) && (
+            <p className="text-yellow-400 animate-pulse">{statusMessage}</p>
+          )}
+          {recordingState === RecordingState.Complete && (
+             <button
+             onClick={resetSession}
+             className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 transition-colors"
+           >
+             Start New Session
+           </button>
+          )}
         </div>
+        {analysisReport && <AnalysisReport report={analysisReport} />}
       </div>
     </main>
   );
+}
