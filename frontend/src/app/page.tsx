@@ -1,41 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<string[]>([]);
-  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws');
+    // Connect to the WebSocket server
+    socketRef.current = new WebSocket('ws://localhost:8000/ws');
 
-    ws.onopen = () => {
+    const socket = socketRef.current;
+
+    socket.onopen = () => {
       console.log('WebSocket connected');
       setMessages(prev => [...prev, 'Connected to server.']);
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       setMessages(prev => [...prev, event.data]);
     };
 
-    ws.onclose = () => {
+    socket.onclose = () => {
       console.log('WebSocket disconnected');
       setMessages(prev => [...prev, 'Disconnected from server.']);
     };
 
-    setSocket(ws);
-
     // Clean up the connection when the component unmounts
     return () => {
-      ws.close();
+      socket.close();
     };
   }, []);
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (socket && message) {
-      socket.send(message);
+    if (socketRef.current && message) {
+      socketRef.current.send(message);
       setMessage('');
     }
   };
