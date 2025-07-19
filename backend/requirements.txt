@@ -1,3 +1,5 @@
 openai-whisper
 pytest
 pytest-mock
+librosa
+pyin

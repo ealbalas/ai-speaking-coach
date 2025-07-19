@@ -19,6 +19,13 @@ The `backend/analysis.py` module provides functions for analyzing the user's spe
 
 This function takes the path to an audio file as input and returns the transcription of the audio. It uses the `base` model of OpenAI's Whisper for efficiency.
 
+### `analyze_vocal_delivery(file_path)`
+
+This function analyzes the vocal delivery of a speech from an audio file and returns a dictionary of metrics, including:
+- **Speaking Rate**: Words per minute.
+- **Pitch Variance**: A score indicating how monotone the speech is.
+- **Long Pauses**: The number of pauses longer than 1.5 seconds.
+
 ## Getting Started
 
 ### System-Level Dependencies
