@@ -75,11 +75,11 @@ export default function Home() {
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900">
       <div className="w-full max-w-md text-center">
-        <h1 className="text-4xl font-bold mb-4">AI Speaking Coach</h1>
-        <p className="mb-6 text-gray-600">{statusMessage}</p>
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <h1 className="text-4xl font-bold mb-4 text-white">AI Speaking Coach</h1>
+        <p className="mb-6 text-gray-300">{statusMessage}</p>
+        <div className="bg-gray-800 rounded-lg shadow-md p-6">
           {recordingState === RecordingState.Idle && (
             <button
               onClick={startRecording}
@@ -96,11 +96,10 @@ export default function Home() {
               Stop Recording
             </button>
           )}
-           {recordingState === RecordingState.Stopped && (
-             <p className="text-green-600">Session complete!</p>
-           )}
+            {recordingState === RecordingState.Stopped && (
+              <p className="text-green-400">Session complete!</p>
+            )}
         </div>
       </div>
     </main>
   );
-}
