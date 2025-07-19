@@ -1,6 +1,13 @@
 # AI Speaking Coach
 
-This project is a web application with a React frontend and a FastAPI backend.
+This project is a web application with a Next.js frontend and a FastAPI backend.
+
+## Features
+
+- **Next.js Frontend**: A modern React framework for building user interfaces.
+- **FastAPI Backend**: A high-performance Python web framework.
+- **WebSocket Communication**: Real-time, two-way communication between the frontend and backend.
+- **Connection Logging**: The backend logs when a client connects or disconnects from the WebSocket.
 
 ## Getting Started
 
