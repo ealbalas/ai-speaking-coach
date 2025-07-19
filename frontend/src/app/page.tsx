@@ -1,69 +1,105 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
+
+enum RecordingState {
+  Idle,
+  Recording,
+  Stopped,
+}
 
 export default function Home() {
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<string[]>([]);
+  const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.Idle);
+  const [statusMessage, setStatusMessage] = useState('Click "Start Recording" to begin.');
+  
   const socketRef = useRef<WebSocket | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
-  useEffect(() => {
-    // Connect to the WebSocket server
-    socketRef.current = new WebSocket('ws://localhost:8000/ws');
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setStatusMessage('Microphone access granted. Connecting to server...');
+      
+      const socket = new WebSocket('ws://localhost:8000/ws');
+      socketRef.current = socket;
 
-    const socket = socketRef.current;
+      socket.onopen = () => {
+        setStatusMessage('Connected. Starting recording...');
+        setRecordingState(RecordingState.Recording);
 
-    socket.onopen = () => {
-      console.log('WebSocket connected');
-      setMessages(prev => [...prev, 'Connected to server.']);
-    };
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        mediaRecorderRef.current = mediaRecorder;
 
-    socket.onmessage = (event) => {
-      setMessages(prev => [...prev, event.data]);
-    };
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+            socket.send(event.data);
+          }
+        };
 
-    socket.onclose = () => {
-      console.log('WebSocket disconnected');
-      setMessages(prev => [...prev, 'Disconnected from server.']);
-    };
+        mediaRecorder.onstop = () => {
+          // When recording stops, close the WebSocket connection from the client side.
+          // This will trigger the backend to save the file.
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.close();
+          }
+          stream.getTracks().forEach(track => track.stop()); // Stop microphone access
+          setStatusMessage('Recording stopped. Audio sent to server for processing.');
+          setRecordingState(RecordingState.Stopped);
+        };
+        
+        // Send audio in chunks every second
+        mediaRecorder.start(1000); 
+      };
 
-    // Clean up the connection when the component unmounts
-    return () => {
-      socket.close();
-    };
-  }, []);
+      socket.onclose = () => {
+        setStatusMessage('Connection closed. Ready to start a new session.');
+        setRecordingState(RecordingState.Idle);
+      };
 
-  const sendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (socketRef.current && message) {
-      socketRef.current.send(message);
-      setMessage('');
+      socket.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        setStatusMessage('Connection error. Please try again.');
+        setRecordingState(RecordingState.Idle);
+      };
+
+    } catch (error) {
+      console.error('Error getting user media:', error);
+      setStatusMessage('Could not access microphone. Please check permissions and try again.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-4xl font-bold mb-4">AI Speaking Coach</h1>
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6">
-        <div className="mb-4 h-64 overflow-y-auto border rounded p-2">
-          <ul>
-            {messages.map((msg, index) => (
-              <li key={index}>{msg}</li>
-            ))}
-          </ul>
+    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">
+      <div className="w-full max-w-md text-center">
+        <h1 className="text-4xl font-bold mb-4">AI Speaking Coach</h1>
+        <p className="mb-6 text-gray-600">{statusMessage}</p>
+        <div className="bg-white rounded-lg shadow-md p-6">
+          {recordingState === RecordingState.Idle && (
+            <button
+              onClick={startRecording}
+              className="w-full px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 transition-colors"
+            >
+              Start Recording
+            </button>
+          )}
+          {recordingState === RecordingState.Recording && (
+            <button
+              onClick={stopRecording}
+              className="w-full px-6 py-3 bg-red-500 text-white font-semibold rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition-colors"
+            >
+              Stop Recording
+            </button>
+          )}
+           {recordingState === RecordingState.Stopped && (
+             <p className="text-green-600">Session complete!</p>
+           )}
         </div>
-        <form onSubmit={sendMessage}>
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="w-full p-2 border rounded"
-            placeholder="Type a message..."
-          />
-          <button type="submit" className="w-full mt-2 p-2 bg-blue-500 text-white rounded">
-            Send
-          </button>
-        </form>
       </div>
     </main>
   );

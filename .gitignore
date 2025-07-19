@@ -5,6 +5,8 @@
 /node_modules
 /.pnp
 .pnp.js
+/backend/audio_files
+/backend/venv/*
 
 # testing
 /coverage

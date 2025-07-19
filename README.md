@@ -1,15 +1,31 @@
 # AI Speaking Coach
 
-This project is a web application with a Next.js frontend and a FastAPI backend.
+This project is a web application designed to help users improve their public speaking skills. It records a user's speech and saves it for future analysis.
 
 ## Features
 
-- **Next.js Frontend**: A modern React framework for building user interfaces.
-- **FastAPI Backend**: A high-performance Python web framework.
-- **WebSocket Communication**: Real-time, two-way communication between the frontend and backend.
-- **Connection Logging**: The backend logs when a client connects or disconnects from the WebSocket.
+- **Next.js Frontend**: A modern React-based frontend for a smooth user experience.
+- **FastAPI Backend**: A high-performance Python backend for handling real-time data.
+- **Real-time Audio Streaming**: Captures audio from the user's microphone and streams it to the server via WebSockets.
+- **Audio Processing & Storage**: The backend processes the incoming audio stream and saves it as a `.wav` file upon session completion.
+- **Connection Logging**: The backend logs client connections, disconnections, and audio processing status.
 
 ## Getting Started
+
+### System-Level Dependencies
+
+This project requires **FFmpeg** for audio processing on the backend. Please install it on your system before running the application.
+
+-   **On macOS (using Homebrew):**
+    ```bash
+    brew install ffmpeg
+    ```
+-   **On Debian/Ubuntu:**
+    ```bash
+    sudo apt update && sudo apt install ffmpeg
+    ```
+-   **On Windows:**
+    Download the binaries from the [official FFmpeg website](https://ffmpeg.org/download.html) and add the `bin` directory to your system's PATH.
 
 ### Prerequisites
 
@@ -29,7 +45,7 @@ This project is a web application with a Next.js frontend and a FastAPI backend.
     python3 -m venv venv
     source venv/bin/activate
     ```
-3.  Install the dependencies:
+3.  Install the Python dependencies (including `pydub`):
     ```bash
     pip install -r requirements.txt
     ```
