@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, FC } from 'react';
 import AnalysisReport from './AnalysisReport';
 
 enum RecordingState {
@@ -11,7 +11,7 @@ enum RecordingState {
   Complete,
 }
 
-export default function Home() {
+const Home: FC = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.Idle);
   const [statusMessage, setStatusMessage] = useState('Click "Start Recording" to begin.');
   const [analysisReport, setAnalysisReport] = useState<any>(null);
@@ -116,12 +116,23 @@ export default function Home() {
     setAnalysisReport(null);
     sessionIdRef.current = null;
   };
+ 
+  // --- Main Render Logic ---
+  if (recordingState === RecordingState.Complete && analysisReport) {
+    // If analysis is complete, show ONLY the report
+    return (
+        <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900">
+            <AnalysisReport report={analysisReport} onReset={resetSession} />
+        </main>
+    );
+  }
 
+  // Otherwise, show the recording UI
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900">
       <div className="w-full max-w-md text-center">
         <h1 className="text-4xl font-bold mb-4 text-white">AI Speaking Coach</h1>
-        <p className="mb-6 text-gray-300">{statusMessage}</p>
+        <p className="mb-6 text-gray-300 h-10">{statusMessage}</p>
         <div className="bg-gray-800 rounded-lg shadow-md p-6">
           {recordingState === RecordingState.Idle && (
             <button
@@ -140,19 +151,18 @@ export default function Home() {
             </button>
           )}
           {(recordingState === RecordingState.Stopped || recordingState === RecordingState.Analyzing) && (
-            <p className="text-yellow-400 animate-pulse">{statusMessage}</p>
-          )}
-          {recordingState === RecordingState.Complete && (
-             <button
-             onClick={resetSession}
-             className="w-full px-6 py-3 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75 transition-colors"
-           >
-             Start New Session
-           </button>
+            <div className="flex justify-center items-center text-blue-400">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {statusMessage}
+             </div>
           )}
         </div>
-        {analysisReport && <AnalysisReport report={analysisReport} />}
       </div>
     </main>
   );
 }
+
+export default Home;

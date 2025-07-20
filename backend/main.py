@@ -97,7 +97,7 @@ async def get_analysis(session_id: str):
         transcript = transcribe_audio(file_path)
 
         # 2. Analyze Vocal Delivery
-        vocal_delivery_metrics = analyze_vocal_delivery(file_path)
+        vocal_delivery_metrics = analyze_vocal_delivery(file_path, transcript)
 
         # 3. Analyze Content
         content_metrics = analyze_content(transcript)
@@ -110,6 +110,7 @@ async def get_analysis(session_id: str):
         }
 
         logger.info(f"Successfully generated analysis for session {session_id}.")
+        logger.info(f"Full Report: {full_report}")
         return full_report
 
     except Exception as e:
