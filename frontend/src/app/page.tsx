@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, FC } from 'react';
+import { useState, useRef, FC, useEffect } from 'react';
 import AnalysisReport from './AnalysisReport';
 
 enum RecordingState {
@@ -11,14 +11,35 @@ enum RecordingState {
   Complete,
 }
 
+interface FeedbackMessage {
+    id: number;
+    text: string;
+}
+
 const Home: FC = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.Idle);
   const [statusMessage, setStatusMessage] = useState('Click "Start Recording" to begin.');
   const [analysisReport, setAnalysisReport] = useState<any>(null);
+  const [realtimeFeedback, setRealtimeFeedback] = useState<FeedbackMessage[]>([]);
   
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const sessionIdRef = useRef<string | null>(null); // Use a ref for the session ID
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Automatically remove feedback messages after a delay
+    if (realtimeFeedback.length > 0) {
+        const timer = setTimeout(() => {
+            setRealtimeFeedback(fb => fb.slice(1));
+        }, 5000); // Message disappears after 5 seconds
+        return () => clearTimeout(timer);
+    }
+  }, [realtimeFeedback]);
+
+  const addRealtimeFeedback = (text: string) => {
+    const newMessage: FeedbackMessage = { id: Date.now(), text };
+    setRealtimeFeedback(fb => [...fb, newMessage]);
+  };
 
   const fetchAnalysis = async (id: string) => {
     setRecordingState(RecordingState.Analyzing);
@@ -41,6 +62,7 @@ const Home: FC = () => {
 
   const startRecording = async () => {
     setAnalysisReport(null);
+    setRealtimeFeedback([]);
     sessionIdRef.current = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -56,7 +78,7 @@ const Home: FC = () => {
       socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.session_id) {
-          sessionIdRef.current = data.session_id; // Store session ID in the ref
+          sessionIdRef.current = data.session_id;
           setStatusMessage('Session started. Recording...');
           setRecordingState(RecordingState.Recording);
 
@@ -78,13 +100,15 @@ const Home: FC = () => {
             setRecordingState(RecordingState.Stopped);
           };
           
-          mediaRecorder.start(1000);
+          mediaRecorder.start(1000); // Send data every second
+        } else if (data.type === 'FILLER_WORD') {
+            addRealtimeFeedback(`Filler word detected: "${data.words.join(', ')}"`);
         }
       };
 
       socket.onclose = () => {
         setStatusMessage('Upload complete. Preparing analysis...');
-        if (sessionIdRef.current) { // Read session ID from the ref
+        if (sessionIdRef.current) {
           fetchAnalysis(sessionIdRef.current);
         } else {
             setStatusMessage('Could not get session ID. Please try again.');
@@ -114,12 +138,11 @@ const Home: FC = () => {
     setRecordingState(RecordingState.Idle);
     setStatusMessage('Click "Start Recording" to begin.');
     setAnalysisReport(null);
+    setRealtimeFeedback([]);
     sessionIdRef.current = null;
   };
  
-  // --- Main Render Logic ---
   if (recordingState === RecordingState.Complete && analysisReport) {
-    // If analysis is complete, show ONLY the report
     return (
         <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900">
             <AnalysisReport report={analysisReport} onReset={resetSession} />
@@ -127,12 +150,21 @@ const Home: FC = () => {
     );
   }
 
-  // Otherwise, show the recording UI
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-900">
       <div className="w-full max-w-md text-center">
         <h1 className="text-4xl font-bold mb-4 text-white">AI Speaking Coach</h1>
         <p className="mb-6 text-gray-300 h-10">{statusMessage}</p>
+        
+        {/* Real-time Feedback Display */}
+        <div className="h-24 mb-4">
+            {realtimeFeedback.map((msg) => (
+                <div key={msg.id} className="text-yellow-400 bg-gray-700 rounded-md p-2 shadow-lg animate-fadeIn">
+                    {msg.text}
+                </div>
+            ))}
+        </div>
+
         <div className="bg-gray-800 rounded-lg shadow-md p-6">
           {recordingState === RecordingState.Idle && (
             <button

@@ -1,21 +1,31 @@
 import logging
 import os
 import uuid
+import asyncio
 from io import BytesIO
 
-from analysis import analyze_content, analyze_vocal_delivery, transcribe_audio
+from analysis import (
+    analyze_content,
+    analyze_vocal_delivery,
+    transcribe_audio,
+    transcribe_audio_chunk,
+    analyze_chunk_for_fillers,
+    analyze_pitch_chunk,
+    decode_webm_to_wav 
+)
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydub import AudioSegment
+import soundfile as sf
 
 # --- Load Environment Variables ---
-# This will load the .env file located in the same directory (backend/)
 load_dotenv()
 
 # --- Configuration ---
 AUDIO_DIR = "audio_files"
 os.makedirs(AUDIO_DIR, exist_ok=True)
+CHUNK_DURATION_SECONDS = 3  # Analyze every 3 seconds
+WEBSOCKET_BUFFER_SECONDS = 1 # Buffer 1 second of audio before processing a chunk
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,66 +36,108 @@ app = FastAPI()
 # --- CORS Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allows the Next.js frontend
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, WebSocket] = {}
 
-@app.on_event("startup")
-async def startup_event():
-    logger.info("--- SERVER STARTUP ---")
-    logger.info("Audio files will be saved to the '%s' directory.", AUDIO_DIR)
+    async def connect(self, websocket: WebSocket, session_id: str):
+        await websocket.accept()
+        self.active_connections[session_id] = websocket
+
+    def disconnect(self, session_id: str):
+        del self.active_connections[session_id]
+
+    async def send_json(self, session_id: str, data: dict):
+        if session_id in self.active_connections:
+            await self.active_connections[session_id].send_json(data)
+
+manager = ConnectionManager()
+
+async def audio_processing_task(session_id: str, websocket: WebSocket):
+    full_audio_bytes = bytearray()
+    chunk_buffer = bytearray()
+    header = None
+    
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            if header is None:
+                header = data
+            
+            full_audio_bytes.extend(data)
+            chunk_buffer.extend(data)
+
+            # Simple duration estimation (highly approximate)
+            # A 48kHz/16-bit mono stream is ~96kB/s. A webm/opus is much smaller.
+            # This threshold is a heuristic to trigger analysis, not a precise measure.
+            if len(chunk_buffer) > 15000 * CHUNK_DURATION_SECONDS: # ~15-20kBps for opus
+                logger.info(f"Processing chunk for session {session_id}, buffer size: {len(chunk_buffer)} bytes")
+                
+                # Perform Chunk Analysis in a non-blocking way
+                # We prepend the header to the current chunk to make it a valid WebM stream
+                analysis_bytes = header + bytes(chunk_buffer)
+                asyncio.create_task(analyze_and_feedback(session_id, analysis_bytes))
+
+                # Reset chunk buffer
+                chunk_buffer.clear()
+
+    except WebSocketDisconnect:
+        logger.warning(f"Client disconnected. Saving full audio for session {session_id}...")
+        if full_audio_bytes:
+            save_final_audio(session_id, bytes(full_audio_bytes))
+        else:
+            logger.info(f"No audio data received for session {session_id}.")
+    finally:
+        manager.disconnect(session_id)
+
+async def analyze_and_feedback(session_id: str, audio_bytes: bytes):
+    try:
+        transcript_chunk = transcribe_audio_chunk(audio_bytes)
+        if transcript_chunk:
+            logger.info(f"Chunk transcript for {session_id}: {transcript_chunk}")
+            filler_words = analyze_chunk_for_fillers(transcript_chunk)
+            if filler_words:
+                logger.info(f"Filler words detected for {session_id}: {filler_words}")
+                await manager.send_json(session_id, {
+                    "type": "FILLER_WORD",
+                    "words": filler_words
+                })
+    except Exception as e:
+        logger.error(f"Error during chunk analysis for session {session_id}: {e}")
+
+def save_final_audio(session_id: str, audio_bytes: bytes):
+    try:
+        # Decode the entire stream to WAV for final storage
+        audio_array = decode_webm_to_wav(audio_bytes)
+        output_path = os.path.join(AUDIO_DIR, f"{session_id}.wav")
+        
+        # Save as WAV file
+        sf.write(output_path, audio_array, 16000) # 16kHz as per our decode spec
+        logger.info(f"Successfully saved audio for session {session_id} at {output_path}")
+
+    except Exception as e:
+        logger.error(f"Failed to process and save final audio for session {session_id}. Error: {e}")
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
     session_id = str(uuid.uuid4())
-    logger.info(
-        f"Client connected: {websocket.client.host}:{websocket.client.port} (Session: {session_id})"
-    )
-
-    # Send the session_id to the client immediately after connection
-    await websocket.send_json({"session_id": session_id})
-
-    audio_buffer = BytesIO()
-
-    try:
-        while True:
-            data = await websocket.receive_bytes()
-            audio_buffer.write(data)
-    except WebSocketDisconnect:
-        logger.warning(
-            f"Client disconnected. Processing audio for session {session_id}..."
-        )
-
-        if audio_buffer.tell() > 0:
-            audio_buffer.seek(0)
-
-            try:
-                audio_segment = AudioSegment.from_file(audio_buffer, format="webm")
-                output_path = os.path.join(AUDIO_DIR, f"{session_id}.wav")
-                audio_segment.export(output_path, format="wav")
-                logger.info(
-                    f"Successfully saved audio for session {session_id} at {output_path}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to process audio for session {session_id}. Error: {e}"
-                )
-        else:
-            logger.info(
-                f"No audio data received for session {session_id}. Nothing to save."
-            )
+    await manager.connect(websocket, session_id)
+    logger.info(f"Client connected: {websocket.client.host}:{websocket.client.port} (Session: {session_id})")
+    
+    await manager.send_json(session_id, {"session_id": session_id})
+    
+    await audio_processing_task(session_id, websocket)
 
 
 @app.get("/analysis/{session_id}")
 async def get_analysis(session_id: str):
-    """
-    Analyzes the audio file for a given session and returns a full report.
-    """
     logger.info(f"Starting analysis for session {session_id}...")
     file_path = os.path.join(AUDIO_DIR, f"{session_id}.wav")
 
@@ -93,16 +145,10 @@ async def get_analysis(session_id: str):
         raise HTTPException(status_code=404, detail="Audio file not found.")
 
     try:
-        # 1. Transcribe Audio
         transcript = transcribe_audio(file_path)
-
-        # 2. Analyze Vocal Delivery
         vocal_delivery_metrics = analyze_vocal_delivery(file_path, transcript)
-
-        # 3. Analyze Content
         content_metrics = analyze_content(transcript)
 
-        # 4. Combine Results
         full_report = {
             "transcript": transcript,
             "vocal_delivery": vocal_delivery_metrics,
@@ -110,14 +156,16 @@ async def get_analysis(session_id: str):
         }
 
         logger.info(f"Successfully generated analysis for session {session_id}.")
-        logger.info(f"Full Report: {full_report}")
         return full_report
 
     except Exception as e:
         logger.error(f"An error occurred during analysis for session {session_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to analyze audio.")
 
-
 @app.get("/")
-async def get():
+async def root():
     return {"message": "AI Speaking Coach backend is running. Connect via WebSocket."}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -5,3 +5,7 @@ librosa
 pyin
 google-generativeai
 python-dotenv
+soundfile
+fastapi
+uvicorn
+websockets
