@@ -1,38 +1,49 @@
+import io
 import json
 import os
-import io
+import re
 import subprocess
-import numpy as np
-import librosa
-import whisper
-import soundfile as sf
+
 import google.generativeai as genai
+import librosa
+import numpy as np
+import soundfile as sf
+import whisper
+
 
 def decode_webm_to_wav(webm_bytes: bytes) -> np.ndarray:
     """
     Decodes a WEBM byte stream to a WAV-like NumPy array using FFmpeg.
     """
     command = [
-        'ffmpeg',
-        '-i', 'pipe:0',          # Input from stdin
-        '-f', 'wav',             # Output format WAV
-        '-acodec', 'pcm_s16le',  # PCM 16-bit little-endian codec
-        '-ar', '16000',          # Audio sample rate 16kHz
-        '-ac', '1',              # Mono channel
-        'pipe:1'                 # Output to stdout
+        "ffmpeg",
+        "-i",
+        "pipe:0",  # Input from stdin
+        "-f",
+        "wav",  # Output format WAV
+        "-acodec",
+        "pcm_s16le",  # PCM 16-bit little-endian codec
+        "-ar",
+        "16000",  # Audio sample rate 16kHz
+        "-ac",
+        "1",  # Mono channel
+        "pipe:1",  # Output to stdout
     ]
-    
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    process = subprocess.Popen(
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     stdout_data, stderr_data = process.communicate(input=webm_bytes)
-    
+
     if process.returncode != 0:
         raise RuntimeError(f"FFmpeg error: {stderr_data.decode()}")
 
     # Load the WAV data from stdout into a NumPy array
     wav_io = io.BytesIO(stdout_data)
     audio_array, samplerate = sf.read(wav_io)
-    
+
     return audio_array
+
 
 def transcribe_audio(file_path: str) -> str:
     """
@@ -41,6 +52,7 @@ def transcribe_audio(file_path: str) -> str:
     model = whisper.load_model("base")
     result = model.transcribe(file_path)
     return result["text"]
+
 
 def transcribe_audio_chunk(audio_chunk_bytes: bytes) -> str:
     """
@@ -57,6 +69,7 @@ def transcribe_audio_chunk(audio_chunk_bytes: bytes) -> str:
         print(f"Error during chunk transcription: {e}")
         return ""
 
+
 def analyze_chunk_for_fillers(transcript: str) -> list:
     """
     Analyzes a small transcript chunk for common filler words.
@@ -65,9 +78,10 @@ def analyze_chunk_for_fillers(transcript: str) -> list:
     found_fillers = []
     # Use word boundaries to avoid matching parts of words (e.g., "rum" in "drum")
     for word in filler_words:
-        if f" {word} " in f" {transcript.lower()} ":
+        if re.search(r"\b" + re.escape(word) + r"\b", transcript.lower()):
             found_fillers.append(word)
     return found_fillers
+
 
 def analyze_pitch_chunk(audio_chunk_bytes: bytes) -> dict:
     """
@@ -78,7 +92,7 @@ def analyze_pitch_chunk(audio_chunk_bytes: bytes) -> dict:
         # Ensure the array is float32, as required by librosa
         y = audio_array.astype(np.float32)
         sr = 16000  # Sample rate is fixed by our decoding step
-        
+
         f0, voiced_flag, _ = librosa.pyin(
             y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr
         )
@@ -88,6 +102,7 @@ def analyze_pitch_chunk(audio_chunk_bytes: bytes) -> dict:
     except (RuntimeError, sf.SoundFileError) as e:
         print(f"Error during pitch chunk analysis: {e}")
         return {"pitch_variance_chunk": 0}
+
 
 def analyze_vocal_delivery(file_path: str, transcript: str) -> dict:
     """
@@ -108,12 +123,22 @@ def analyze_vocal_delivery(file_path: str, transcript: str) -> dict:
     long_pauses_count = 0
     if len(non_silent_intervals) > 1:
         for i in range(len(non_silent_intervals) - 1):
-            pause_duration = (non_silent_intervals[i+1][0] - non_silent_intervals[i][1]) / sr
+            pause_duration = (
+                non_silent_intervals[i + 1][0] - non_silent_intervals[i][1]
+            ) / sr
             if pause_duration > 1.5:
                 long_pauses_count += 1
 
     num_points = 100
-    pitch_over_time = np.interp(np.linspace(0, len(voiced_f0), num_points), np.arange(len(voiced_f0)), voiced_f0).tolist() if voiced_f0.size > 0 else []
+    pitch_over_time = (
+        np.interp(
+            np.linspace(0, len(voiced_f0), num_points),
+            np.arange(len(voiced_f0)),
+            voiced_f0,
+        ).tolist()
+        if voiced_f0.size > 0
+        else []
+    )
 
     pace_over_time = []
     chunk_size_seconds = 5
@@ -131,6 +156,7 @@ def analyze_vocal_delivery(file_path: str, transcript: str) -> dict:
         "pitch_over_time": pitch_over_time,
         "pace_over_time": pace_over_time,
     }
+
 
 def analyze_content(transcript: str) -> dict:
     """
@@ -158,7 +184,9 @@ def analyze_content(transcript: str) -> dict:
 
     try:
         response = model.generate_content(prompt)
-        json_string = response.text.strip().replace("```json", "").replace("```", "").strip()
+        json_string = (
+            response.text.strip().replace("```json", "").replace("```", "").strip()
+        )
         return json.loads(json_string)
     except Exception as e:
         print(f"An error occurred during API call: {e}")
