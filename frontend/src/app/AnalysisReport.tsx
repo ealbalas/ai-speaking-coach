@@ -39,7 +39,7 @@ interface AnalysisReportProps {
       filler_word_counts: Record<string, number>;
       clarity_score: number;
       suggestions: string[];
-      improved_sentence: string[];
+      improved_sentence: string;
     };
   };
   onReset: () => void;
@@ -130,6 +130,14 @@ const AnalysisReport: React.FC<AnalysisReportProps> = ({ report, onReset }) => {
       <div>
         <h3 className="text-xl font-semibold text-gray-300">Content Analysis</h3>
         <ul className="list-disc list-inside text-gray-400 space-y-2">
+          <li>
+            Filler Words:
+            <ul className="list-disc list-inside ml-4 mt-1">
+              {Object.entries(report.content.filler_word_counts).map(([word, count]) => (
+                <li key={word}>{`${word}: ${count}`}</li>
+              ))}
+            </ul>
+          </li>
           <li>Clarity Score: {report.content.clarity_score}/10</li>
           <li>Suggestions:
             <ul className="list-disc list-inside ml-4 mt-1">
@@ -138,9 +146,9 @@ const AnalysisReport: React.FC<AnalysisReportProps> = ({ report, onReset }) => {
               ))}
             </ul>
           </li>
-          <li>Imporvement:
+          <li>Improvement:
             <ul className="list-disc list-inside ml-4 mt-1">
-              {report.content.improved_sentence}
+              <li>{report.content.improved_sentence}</li>
             </ul>
           </li>
         </ul>

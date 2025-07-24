@@ -16,10 +16,27 @@ interface FeedbackMessage {
     text: string;
 }
 
+interface AnalysisReportData {
+  transcript: string;
+  vocal_delivery: {
+    speaking_rate: number;
+    pitch_variance: number;
+    long_pauses_count: number;
+    pitch_over_time: number[];
+    pace_over_time: number[];
+  };
+  content: {
+    filler_word_counts: Record<string, number>;
+    clarity_score: number;
+    suggestions: string[];
+    improved_sentence: string;
+  };
+}
+
 const Home: FC = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>(RecordingState.Idle);
   const [statusMessage, setStatusMessage] = useState('Click "Start Recording" to begin.');
-  const [analysisReport, setAnalysisReport] = useState<any>(null);
+  const [analysisReport, setAnalysisReport] = useState<AnalysisReportData | null>(null);
   const [realtimeFeedback, setRealtimeFeedback] = useState<FeedbackMessage[]>([]);
   
   const socketRef = useRef<WebSocket | null>(null);
