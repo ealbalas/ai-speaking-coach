@@ -79,7 +79,7 @@ const AnalysisReport: React.FC<AnalysisReportProps> = ({ report, onReset }) => {
   const chartOptions = {
     responsive: true,
     plugins: {
-      legend: { position: 'top', labels: { color: '#ffffff' } },
+      legend: { position: 'top' as const, labels: { color: '#ffffff' } },
       title: { display: true, font: { size: 18 }, color: '#ffffff' },
     },
     scales: {
@@ -124,7 +124,7 @@ const AnalysisReport: React.FC<AnalysisReportProps> = ({ report, onReset }) => {
       {/* --- Existing Report Sections --- */}
       <div className="mb-4">
         <h3 className="text-xl font-semibold text-gray-300">Transcript</h3>
-        <p className="bg-gray-700 p-4 rounded-lg text-gray-300 italic">"{report.transcript}"</p>
+        <p className="bg-gray-700 p-4 rounded-lg text-gray-300 italic">&quot;{report.transcript}&quot;</p>
       </div>
       
       <div>
