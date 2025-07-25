@@ -21,4 +21,4 @@ EXPOSE $PORT
 
 # Define the command to run the application.
 # It uses the PORT environment variable provided by the hosting service.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD uvicorn main:app --host 0.0.0.0 --port $PORT
