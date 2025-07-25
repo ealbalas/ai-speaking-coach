@@ -34,9 +34,23 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # --- CORS Middleware ---
+# This is crucial for allowing the Vercel frontend to communicate with this backend.
+# We read the frontend URL from an environment variable for flexibility.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+origins = [
+    FRONTEND_URL,
+    # You can add more static origins here if needed
+]
+
+# Allow all Vercel preview deployments
+if "vercel.app" in FRONTEND_URL:
+    origins.append("*.vercel.app")
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -168,4 +182,6 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Render provides the PORT environment variable
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

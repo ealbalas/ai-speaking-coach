@@ -62,7 +62,8 @@ const Home: FC = () => {
     setRecordingState(RecordingState.Analyzing);
     setStatusMessage('Analyzing your speech...');
     try {
-      const response = await fetch(`http://localhost:8000/analysis/${id}`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/analysis/${id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch analysis.');
       }
@@ -85,7 +86,8 @@ const Home: FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setStatusMessage('Microphone access granted. Connecting to server...');
       
-      const socket = new WebSocket('ws://localhost:8000/ws');
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+      const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {
